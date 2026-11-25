@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nanias</title>
+  <style>
+    :root {
+      --bordeaux: #6d1a2e;
+      --bordeaux-dark: #4a1120;
+      --bordeaux-mid: #8c2640;
+      --bordeaux-light: #f7ebee;
+      --bordeaux-soft: #ead2d8;
+      --gold: #c9a15b;
+      --background: #f6f1ec;
+      --panel: #ffffff;
+      --ink: #2a1a20;
+      --muted: #7a6a70;
+      --border: #e7dcdf;
+      --shadow: 0 6px 20px rgba(74, 17, 32, .10);
+      --shadow-lg: 0 16px 36px rgba(74, 17, 32, .22);
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--background);
+      font-family: var(--font);
+    }
+
+    body.interacting iframe { pointer-events: none; }
+    body.interacting { user-select: none; }
+
+    #toolbar {
+      position: fixed;
+      z-index: 10000;
+      inset: 0 0 auto;
+      min-height: 64px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: linear-gradient(120deg, var(--bordeaux-dark), var(--bordeaux) 55%, var(--bordeaux-mid));
+      border-bottom: 3px solid var(--gold);
+      box-shadow: 0 4px 18px rgba(74, 17, 32, .35);
+    }
+
+    .brand {
+      margin-right: 18px;
+      padding-right: 18px;
+      border-right: 1px solid rgba(255, 255, 255, .25);
+      color: #fff;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      white-space: nowrap;
+    }
+
+    .brand::first-letter { color: var(--gold); }
+    .toolbar-spacer { flex: 1; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s, transform .1s;
+    }
+
+    .btn:hover {
+      border-color: var(--bordeaux);
+      background: var(--bordeaux-light);
+      color: var(--bordeaux);
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .btn.primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--bordeaux-mid), var(--bordeaux));
+      border-color: var(--bordeaux);
+    }
+
+    .btn.primary:hover { background: var(--bordeaux-dark); color: #fff; }
+    .btn.small { padding: 6px 10px; font-size: 12px; }
+
+    #toolbar .btn {
+      border-color: rgba(255, 255, 255, .28);
+      background: rgba(255, 255, 255, .10);
+      color: #fff;
+    }
+
+    #toolbar .btn:hover {
+      background: #fff;
+      border-color: #fff;
+      color: var(--bordeaux);
+    }
+
+    #toolbar .btn.ghost {
+      border-color: rgba(201, 161, 91, .6);
+      color: #f3deb4;
+    }
+
+    #board {
+      position: fixed;
+      inset: 67px 0 0;
+      overflow: auto;
+      background-image: radial-gradient(rgba(109, 26, 46, .13) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    #canvas {
+      position: relative;
+      width: max(100%, 1300px);
+      min-height: 1300px;
+    }
+
+    .widget {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      min-width: 220px;
+      min-height: 140px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-top: 4px solid var(--bordeaux);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .widget.w-dragging {
+      opacity: .92;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .w-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #fdf8f9, var(--bordeaux-light));
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .w-head:active { cursor: grabbing; }
+
+    .w-title {
+      flex: 1;
+      color: var(--bordeaux);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+    }
+
+    .w-del {
+      padding: 4px 9px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .w-del:hover { background: var(--bordeaux); color: #fff; }
+
+    .w-body {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 0 0 14px 0;
+      background: linear-gradient(135deg, transparent 45%, var(--bordeaux-soft) 45%, var(--bordeaux-soft) 55%, transparent 55%);
+      cursor: nwse-resize;
+      touch-action: none;
+    }
+
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: #fffdfd;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    input:focus, textarea:focus, select:focus, .rte-area:focus {
+      outline: 3px solid rgba(140, 38, 64, .15);
+      border-color: var(--bordeaux-mid);
+    }
+
+    textarea { min-height: 78px; resize: vertical; }
+    label { color: var(--bordeaux); font-size: 12px; font-weight: 700; }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .row > * { flex: 1; min-width: 0; }
+    .row > .btn { flex: 0 0 auto; }
+
+    .timer-display {
+      padding: 10px 0;
+      border-radius: 14px;
+      background: var(--bordeaux-light);
+      color: var(--bordeaux);
+      text-align: center;
+      font-size: 54px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 2px;
+    }
+
+    .timer-display.warn { background: var(--bordeaux); color: #fff; }
+
+    .timer-controls, .preset-chips, .phase-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .chip {
+      padding: 5px 11px;
+      border: 1px solid var(--bordeaux-soft);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--bordeaux);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .chip:hover {
+      border-color: var(--bordeaux);
+      background: var(--bordeaux);
+      color: #fff;
+    }
+
+    .phase-badge {
+      padding: 20px 10px;
+      border-radius: 14px;
+      color: #fff;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 800;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .15);
+    }
+
+    .team-boxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .team-box {
+      flex: 1;
+      min-width: 130px;
+      padding: 10px 12px;
+      border: 1px solid var(--bordeaux-soft);
+      border-left: 4px solid var(--bordeaux);
+      border-radius: 10px;
+      background: #fdf9fa;
+      color: var(--ink);
+    }
+
+    .team-box h4 { margin: 0 0 6px; color: var(--bordeaux); font-size: 13px; }
+    .team-box ul { margin: 0; padding: 0; list-style: none; }
+    .team-box li { padding: 2px 0; font-size: 13px; }
+    .saved-list { display: flex; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 12px; }
+
+    .saved-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 7px;
+      border: 1px solid var(--bordeaux-soft);
+      border-radius: 10px;
+      background: #fdf9fa;
+    }
+
+    /* ILIAS-Pfad-Widget */
+    .path-display {
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 130px;
+      padding: 18px;
+      border: 2px solid var(--bordeaux-soft);
+      border-radius: 14px;
+      background: var(--bordeaux-light);
+    }
+
+    .path-step {
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--bordeaux);
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    .path-step.current {
+      background: var(--bordeaux);
+      color: #fff;
+    }
+
+    .path-arrow {
+      color: var(--gold);
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .iframe-wrap {
+      display: flex;
+      flex: 1;
+      min-height: 200px;
+      overflow: hidden;
+      border: 1px solid var(--bordeaux-soft);
+      border-radius: 10px;
+      background: #f8f4f5;
+    }
+
+    .iframe-wrap iframe {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+    }
+
+    .browser-status { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .browser-notice {
+      padding: 8px 11px;
+      border: 1px solid var(--gold);
+      border-radius: 9px;
+      background: #fbf4e6;
+      color: #6b4a10;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .rte-toolbar { display: flex; flex-wrap: wrap; gap: 5px; }
+
+    .rte-btn {
+      padding: 5px 9px;
+      border: 1px solid var(--bordeaux-soft);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .rte-btn:hover {
+      border-color: var(--bordeaux);
+      background: var(--bordeaux-light);
+      color: var(--bordeaux);
+    }
+
+    .rte-area {
+      flex: 1;
+      min-height: 120px;
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: #fffdfd;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .rte-area h2 { margin: 6px 0; color: var(--bordeaux); font-weight: 800; }
+    .rte-area ul, .rte-area ol { padding-left: 22px; }
+
+    @media (max-width: 760px) {
+      #toolbar { gap: 6px; padding: 8px 10px; }
+      .brand {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 22px;
+      }
+      .toolbar-spacer { display: none; }
+      #board { inset: 112px 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="brand">Nanias</span>
+    <button class="btn" type="button" data-add="timer">Timer</button>
+    <button class="btn" type="button" data-add="phase">Arbeitsphase</button>
+    <button class="btn" type="button" data-add="teams">Teamgenerator</button>
+    <button class="btn" type="button" data-add="browser">Browser</button>
+    <button class="btn" type="button" data-add="text">Notizen</button>
+    <button class="btn" type="button" data-add="path">ILIAS-Pfad</button>
+    <span class="toolbar-spacer"></span>
+    <button class="btn ghost" id="reset-button" type="button">Layout zurücksetzen</button>
+  </div>
+
+  <div id="board">
+    <div id="canvas"></div>
+  </div>
+
+  <script>
+    const STORE_KEY = 'klassenboard_v2';
+    const START_URL = 'https://ilias.nania.li';
+
+    const IN_EMBEDDED_VIEW = (() => {
+      try { return window.self !== window.top; }
+      catch (error) { return true; }
+    })();
+
+    let widgets = [];
+    let uid = 1;
+    let zTop = 1;
+    let saveTimer = null;
+    let resetPending = false;
+
+    const DEFAULT_WIDGETS = [
+      {id:'timer1', type:'timer', x:35, y:30, w:360, h:260, data:{duration:600, remaining:600, running:false}},
+      {id:'phase1', type:'phase', x:420, y:30, w:340, h:240, data:{phase:'Einzelarbeit', note:''}},
+      {id:'teams1', type:'teams', x:35, y:320, w:520, h:430, data:{names:'', mode:'anzahl', value:4, teams:null, saved:{}}},
+      {id:'browser1', type:'browser', x:590, y:320, w:640, h:460, data:{url:START_URL}},
+      {id:'text1', type:'text', x:35, y:790, w:480, h:300, data:{html:'<h2>Agenda</h2><ul><li>Aufgabe besprechen</li><li>Arbeitsphase</li></ul>'}}
+    ];
+
+    const TITLES = {
+      timer:'Timer',
+      phase:'Arbeitsphase',
+      teams:'Teamgenerator',
+      browser:'Browser',
+      text:'Notizen',
+      path:'ILIAS-Pfad'
+    };
+
+    const SIZES = {
+      timer:[360,260],
+      phase:[340,240],
+      teams:[500,430],
+      browser:[640,460],
+      text:[460,300],
+      path:[760,330]
+    };
+
+    const PHASE_COLORS = {
+      'Einzelarbeit':'#6d1a2e',
+      'Partner_innenarbeit':'#a3425a',
+      'Gruppenarbeit':'#b8742f',
+      'Diskussion':'#5c4a6e',
+      'Präsentation':'#3f5f5a',
+      'Pause':'#7d7378'
+    };
+
+    const RENDERERS = {
+      timer:renderTimer,
+      phase:renderPhase,
+      teams:renderTeams,
+      browser:renderBrowser,
+      text:renderText,
+      path:renderPath
+    };
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function defaultData(type) {
+      const defaults = {
+        timer:{duration:600, remaining:600, running:false},
+        phase:{phase:'Einzelarbeit', note:''},
+        teams:{names:'', mode:'anzahl', value:4, teams:null, saved:{}},
+        browser:{url:START_URL},
+        text:{html:''},
+        path:{value:'Kurs > Materialien > Projekt > Aufgabe'}
+      };
+      return clone(defaults[type]);
+    }
+
+    function load() {
+      try {
+        const stored = localStorage.getItem(STORE_KEY);
+        widgets = stored ? JSON.parse(stored) : clone(DEFAULT_WIDGETS);
+        if (!Array.isArray(widgets)) throw new Error('Ungültiges Board');
+      } catch (error) {
+        widgets = clone(DEFAULT_WIDGETS);
+      }
+
+      widgets = widgets.filter(widget => widget && typeof widget === 'object');
+
+      widgets.forEach(widget => {
+        if (widget.type === 'ilias') widget.type = 'browser';
+      });
+
+      widgets = widgets.filter(widget => RENDERERS[widget.type]);
+
+      widgets.forEach(widget => {
+        widget.data = widget.data || defaultData(widget.type);
+        widget.x = Number(widget.x) || 40;
+        widget.y = Number(widget.y) || 40;
+        widget.w = Number(widget.w) || SIZES[widget.type][0];
+        widget.h = Number(widget.h) || SIZES[widget.type][1];
+
+        if (widget.type === 'phase') {
+          if (widget.data.phase === 'Stillarbeit') widget.data.phase = 'Einzelarbeit';
+          if (widget.data.phase === 'Partnerarbeit') widget.data.phase = 'Partner_innenarbeit';
+        }
+
+        if (widget.type === 'browser' && !widget.data.url) {
+          widget.data.url = START_URL;
+        }
+
+        if (widget.type === 'path' && typeof widget.data.value !== 'string') {
+          widget.data.value = defaultData('path').value;
+        }
+      });
+
+      uid = widgets.reduce((max, widget) => {
+        const match = String(widget.id).match(/\d+/);
+        return Math.max(max, match ? Number(match[0]) : 0);
+      }, 0) + 1;
+    }
+
+    function save() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveNow, 250);
+    }
+
+    function saveNow() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(widgets)); }
+      catch (error) { console.warn('Das Board konnte nicht gespeichert werden.', error); }
+    }
+
+    function makeElement(html) {
+      const template = document.createElement('template');
+      template.innerHTML = html.trim();
+      return template.content.firstElementChild;
+    }
+
+    function addWidget(type) {
+      if (!RENDERERS[type]) return;
+      const [w, h] = SIZES[type];
+      const widget = {
+        id:type + uid++,
+        type,
+        x:Math.round(50 + Math.random() * 100),
+        y:Math.round(60 + Math.random() * 100),
+        w, h,
+        data:defaultData(type)
+      };
+      widgets.push(widget);
+      renderWidget(widget);
+      save();
+    }
+
+    function removeWidget(widget) {
+      widgets = widgets.filter(item => item.id !== widget.id);
+      const node = document.querySelector('[data-id="' + widget.id + '"]');
+      if (node) node.remove();
+      save();
+    }
+
+    function renderAll() {
+      const canvas = document.getElementById('canvas');
+      canvas.replaceChildren();
+      widgets.forEach(renderWidget);
+    }
+
+    function renderWidget(widget) {
+      const node = makeElement(`
+        <section class="widget" data-id="${widget.id}"
+          style="left:${widget.x}px;top:${widget.y}px;width:${widget.w}px;height:${widget.h}px">
+          <div class="w-head">
+            <span class="w-title"></span>
+            <button class="w-del" type="button" title="Widget entfernen" aria-label="Widget entfernen">Entfernen</button>
+          </div>
+          <div class="w-body"></div>
+          <div class="resize-handle" aria-label="Widgetgröße ändern"></div>
+        </section>
+      `);
+
+      node.style.zIndex = ++zTop;
+      node.querySelector('.w-title').textContent = TITLES[widget.type] || 'Widget';
+      node.addEventListener('pointerdown', () => { node.style.zIndex = ++zTop; }, true);
+      node.querySelector('.w-del').addEventListener('click', () => removeWidget(widget));
+
+      makeDraggable(node, widget);
+      makeResizable(node, widget);
+      RENDERERS[widget.type](node.querySelector('.w-body'), widget);
+      document.getElementById('canvas').appendChild(node);
+    }
+
+    function refreshWidget(widget) {
+      const node = document.querySelector('[data-id="' + widget.id + '"]');
+      if (!node) return;
+      const body = node.querySelector('.w-body');
+      body.replaceChildren();
+      RENDERERS[widget.type](body, widget);
+      save();
+    }
+
+    function startInteraction(onMove, onEnd) {
+      document.body.classList.add('interacting');
+
+      function move(event) { onMove(event); }
+
+      function up() {
+        document.body.classList.remove('interacting');
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        document.removeEventListener('pointercancel', up);
+        onEnd();
+        save();
+      }
+
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+      document.addEventListener('pointercancel', up);
+    }
+
+    function makeDraggable(node, widget) {
+      const header = node.querySelector('.w-head');
+
+      header.addEventListener('pointerdown', event => {
+        if (event.target.closest('button')) return;
+        event.preventDefault();
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const originalX = widget.x;
+        const originalY = widget.y;
+        node.classList.add('w-dragging');
+
+        startInteraction(e => {
+          widget.x = Math.max(0, originalX + e.clientX - startX);
+          widget.y = Math.max(0, originalY + e.clientY - startY);
+          node.style.left = widget.x + 'px';
+          node.style.top = widget.y + 'px';
+        }, () => node.classList.remove('w-dragging'));
+      });
+    }
+
+    function makeResizable(node, widget) {
+      node.querySelector('.resize-handle').addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const originalW = widget.w;
+        const originalH = widget.h;
+
+        startInteraction(e => {
+          widget.w = Math.max(220, originalW + e.clientX - startX);
+          widget.h = Math.max(140, originalH + e.clientY - startY);
+          node.style.width = widget.w + 'px';
+          node.style.height = widget.h + 'px';
+        }, () => {});
+      });
+    }
+
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return String(minutes).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
+    }
+
+    function beep() {
+      try {
+        const audio = new (window.AudioContext || window.webkitAudioContext)();
+
+        [0, .35, .7].forEach(delay => {
+          const oscillator = audio.createOscillator();
+          const gain = audio.createGain();
+          oscillator.frequency.value = 880;
+          oscillator.connect(gain);
+          gain.connect(audio.destination);
+          gain.gain.setValueAtTime(.2, audio.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + delay + .28);
+          oscillator.start(audio.currentTime + delay);
+          oscillator.stop(audio.currentTime + delay + .3);
+        });
+      } catch (error) {}
+    }
+
+    setInterval(() => {
+      widgets.forEach(widget => {
+        if (widget.type !== 'timer' || !widget.data.running) return;
+
+        widget.data.remaining = Math.max(0, widget.data.remaining - 1);
+        const node = document.querySelector('[data-id="' + widget.id + '"]');
+
+        if (widget.data.remaining === 0) {
+          widget.data.running = false;
+          beep();
+          const startButton = node && node.querySelector('[data-act="start"]');
+          if (startButton) startButton.textContent = 'Start';
+        }
+
+        const display = node && node.querySelector('.timer-display');
+        if (display) {
+          display.textContent = formatTime(widget.data.remaining);
+          display.classList.toggle('warn', widget.data.remaining <= 60);
+        }
+
+        save();
+      });
+    }, 1000);
+
+    function renderTimer(body, widget) {
+      body.innerHTML = `
+        <div class="timer-display ${widget.data.remaining <= 60 ? 'warn' : ''}">${formatTime(widget.data.remaining)}</div>
+        <div class="preset-chips"></div>
+        <div class="row">
+          <label for="${widget.id}-mins">Minuten</label>
+          <input id="${widget.id}-mins" class="mins" type="number" min="1" max="120"
+            value="${Math.max(1, Math.round(widget.data.duration / 60))}">
+        </div>
+        <div class="timer-controls">
+          <button class="btn primary" data-act="start" type="button">${widget.data.running ? 'Pause' : 'Start'}</button>
+          <button class="btn" data-act="reset" type="button">Zurücksetzen</button>
+        </div>
+      `;
+
+      const presets = body.querySelector('.preset-chips');
+
+      [[5,'5 Min.'],[10,'10 Min.'],[15,'15 Min.'],[20,'20 Min.'],[30,'30 Min.']].forEach(([minutes, label]) => {
+        const button = makeElement('<button class="chip" type="button"></button>');
+        button.textContent = label;
+        button.addEventListener('click', () => {
+          widget.data.duration = minutes * 60;
+          widget.data.remaining = minutes * 60;
+          widget.data.running = false;
+          refreshWidget(widget);
+        });
+        presets.appendChild(button);
+      });
+
+      body.querySelector('.mins').addEventListener('change', event => {
+        const minutes = Math.max(1, Math.min(120, parseInt(event.target.value, 10) || 1));
+        widget.data.duration = minutes * 60;
+        widget.data.remaining = minutes * 60;
+        widget.data.running = false;
+        refreshWidget(widget);
+      });
+
+      body.querySelector('[data-act="start"]').addEventListener('click', () => {
+        if (!widget.data.running && widget.data.remaining === 0) {
+          widget.data.remaining = widget.data.duration;
+        }
+        widget.data.running = !widget.data.running;
+        refreshWidget(widget);
+      });
+
+      body.querySelector('[data-act="reset"]').addEventListener('click', () => {
+        widget.data.remaining = widget.data.duration;
+        widget.data.running = false;
+        refreshWidget(widget);
+      });
+    }
+
+    function renderPhase(body, widget) {
+      body.innerHTML = `
+        <div class="phase-badge"></div>
+        <div class="phase-buttons"></div>
+        <textarea class="phase-note" placeholder="Aufgabe oder Hinweise für diese Phase"></textarea>
+      `;
+
+      const badge = body.querySelector('.phase-badge');
+      badge.textContent = widget.data.phase;
+      badge.style.background = PHASE_COLORS[widget.data.phase] || '#7d7378';
+
+      const note = body.querySelector('.phase-note');
+      note.value = widget.data.note || '';
+      note.addEventListener('input', event => {
+        widget.data.note = event.target.value;
+        save();
+      });
+
+      Object.keys(PHASE_COLORS).forEach(phase => {
+        const button = makeElement('<button class="btn small" type="button"></button>');
+        button.textContent = phase;
+        if (phase === widget.data.phase) button.classList.add('primary');
+
+        button.addEventListener('click', () => {
+          widget.data.phase = phase;
+          refreshWidget(widget);
+        });
+
+        body.querySelector('.phase-buttons').appendChild(button);
+      });
+    }
+
+    function renderTeams(body, widget) {
+      const data = widget.data;
+
+      body.innerHTML = `
+        <label for="${widget.id}-names">Namen, eine Person pro Zeile</label>
+        <textarea class="names" id="${widget.id}-names" placeholder="Anna&#10;Ben&#10;Cem"></textarea>
+        <div class="row">
+          <select class="mode" aria-label="Einteilung auswählen">
+            <option value="anzahl">Anzahl Teams</option>
+            <option value="groesse">Personen pro Team</option>
+          </select>
+          <input class="val" type="number" min="1" max="30" aria-label="Teamgröße oder Teamanzahl">
+          <button class="btn primary" data-act="mix" type="button">Mischen</button>
+        </div>
+        <div class="team-boxes"></div>
+        <div class="row">
+          <input class="saveName" type="text" placeholder="Name für die Aufteilung">
+          <button class="btn" data-act="saveTeam" type="button">Speichern</button>
+        </div>
+        <label>Gespeicherte Aufteilungen</label>
+        <div class="saved-list"></div>
+      `;
+
+      const namesInput = body.querySelector('.names');
+      const modeInput = body.querySelector('.mode');
+      const valueInput = body.querySelector('.val');
+
+      namesInput.value = data.names || '';
+      modeInput.value = data.mode || 'anzahl';
+      valueInput.value = data.value || 4;
+
+      function drawTeams() {
+        const box = body.querySelector('.team-boxes');
+        box.replaceChildren();
+
+        if (!data.teams) {
+          box.textContent = 'Noch keine Teams erstellt.';
+          return;
+        }
+
+        data.teams.forEach((team, index) => {
+          const teamBox = document.createElement('div');
+          teamBox.className = 'team-box';
+
+          const heading = document.createElement('h4');
+          heading.textContent = 'Team ' + (index + 1) + ' (' + team.length + ')';
+
+          const list = document.createElement('ul');
+          team.forEach(name => {
+            const item = document.createElement('li');
+            item.textContent = name;
+            list.appendChild(item);
+          });
+
+          teamBox.append(heading, list);
+          box.appendChild(teamBox);
+        });
+      }
+
+      function drawSaved(message) {
+        const list = body.querySelector('.saved-list');
+        list.replaceChildren();
+        data.saved = data.saved || {};
+        const names = Object.keys(data.saved);
+
+        if (message) {
+          list.textContent = message;
+          return;
+        }
+
+        if (!names.length) {
+          list.textContent = 'Noch keine Aufteilungen gespeichert.';
+          return;
+        }
+
+        names.forEach(name => {
+          const item = document.createElement('div');
+          item.className = 'saved-item';
+
+          const loadButton = document.createElement('button');
+          loadButton.className = 'btn small';
+          loadButton.type = 'button';
+          loadButton.textContent = name;
+          loadButton.addEventListener('click', () => {
+            data.teams = clone(data.saved[name]);
+            drawTeams();
+            save();
+          });
+
+          const deleteButton = document.createElement('button');
+          deleteButton.className = 'btn small';
+          deleteButton.type = 'button';
+          deleteButton.textContent = 'Löschen';
+          deleteButton.addEventListener('click', () => {
+            delete data.saved[name];
+            drawSaved();
+            save();
+          });
+
+          item.append(loadButton, deleteButton);
+          list.appendChild(item);
+        });
+      }
+
+      body.querySelector('[data-act="mix"]').addEventListener('click', () => {
+        data.names = namesInput.value;
+        data.mode = modeInput.value;
+        data.value = Math.max(1, Math.min(30, parseInt(valueInput.value, 10) || 4));
+
+        const names = data.names.split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+
+        if (!names.length) {
+          data.teams = null;
+          drawTeams();
+          save();
+          return;
+        }
+
+        for (let i = names.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [names[i], names[j]] = [names[j], names[i]];
+        }
+
+        const teamCount = data.mode === 'anzahl'
+          ? Math.min(names.length, data.value)
+          : Math.ceil(names.length / data.value);
+
+        data.teams = Array.from({length:teamCount}, () => []);
+        names.forEach((name, index) => data.teams[index % teamCount].push(name));
+        drawTeams();
+        save();
+      });
+
+      body.querySelector('[data-act="saveTeam"]').addEventListener('click', () => {
+        if (!data.teams) {
+          drawSaved('Erstelle zuerst eine Teamaufteilung.');
+          return;
+        }
+
+        const name = body.querySelector('.saveName').value.trim()
+          || 'Aufteilung ' + new Date().toLocaleDateString('de-DE');
+
+        data.saved = data.saved || {};
+        data.saved[name] = clone(data.teams);
+        drawSaved();
+        save();
+      });
+
+      namesInput.addEventListener('input', () => {
+        data.names = namesInput.value;
+        save();
+      });
+
+      drawTeams();
+      drawSaved();
+    }
+
+    function renderPath(body, widget) {
+      body.innerHTML = `
+        <label for="${widget.id}-path">Pfad eingeben – Schritte mit „&gt;“ trennen</label>
+        <input id="${widget.id}-path" type="text"
+          placeholder="Kurs > Materialien > Projekt > Aufgabe">
+        <div class="path-display" aria-live="polite"></div>
+      `;
+
+      const input = body.querySelector('input');
+      const display = body.querySelector('.path-display');
+      input.value = widget.data.value || '';
+
+      function updatePath() {
+        widget.data.value = input.value;
+        display.replaceChildren();
+
+        const steps = input.value.split('>').map(step => step.trim()).filter(Boolean);
+
+        steps.forEach((step, index) => {
+          if (index > 0) {
+            const arrow = document.createElement('span');
+            arrow.className = 'path-arrow';
+            arrow.textContent = '›';
+            display.appendChild(arrow);
+          }
+
+          const item = document.createElement('span');
+          item.className = 'path-step';
+          if (index === steps.length - 1) item.classList.add('current');
+          item.textContent = step;
+          display.appendChild(item);
+        });
+
+        save();
+      }
+
+      input.addEventListener('input', updatePath);
+      updatePath();
+    }
+
+    function normalizeUrl(raw) {
+      let value = String(raw || '').trim();
+      if (!value) return null;
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = 'https://' + value;
+
+      try {
+        const url = new URL(value);
+        if (url.protocol === 'https:' || url.protocol === 'http:') return url;
+      } catch (error) {}
+
+      return null;
+    }
+
+    function renderBrowser(body, widget) {
+      body.innerHTML = `
+        <div class="row">
+          <input class="browser-url" type="text" aria-label="Webadresse" placeholder="https://example.com">
+          <button class="btn primary" data-act="go" type="button">Öffnen</button>
+          <button class="btn" data-act="reload" type="button">Neu laden</button>
+          <a class="btn browser-tab" target="_blank" rel="noopener noreferrer">Neuer Tab</a>
+        </div>
+        <div class="browser-notice" hidden></div>
+        <div class="iframe-wrap"></div>
+        <div class="browser-status"></div>
+      `;
+
+      const input = body.querySelector('.browser-url');
+      const frameWrap = body.querySelector('.iframe-wrap');
+      const tabLink = body.querySelector('.browser-tab');
+      const status = body.querySelector('.browser-status');
+      const notice = body.querySelector('.browser-notice');
+
+      if (IN_EMBEDDED_VIEW) {
+        notice.hidden = false;
+        notice.textContent = 'Diese Seite läuft in einem eingebetteten Fenster. '
+          + 'Dort können Webseiten und neue Tabs durch den Browser eingeschränkt sein. '
+          + 'Bei Problemen ILIAS in einem eigenen Browser-Tab öffnen.';
+      }
+
+      function updateTabLink() {
+        const url = normalizeUrl(input.value);
+        tabLink.href = url ? url.href : START_URL;
+      }
+
+      function showPage(url) {
+        frameWrap.replaceChildren();
+        status.textContent = 'Lädt … Bleibt das Fenster leer, erlaubt die Seite keine Einbettung. Nutze dann „Neuer Tab“.';
+
+        const frame = document.createElement('iframe');
+        frame.title = 'Browserfenster';
+        frame.referrerPolicy = 'strict-origin-when-cross-origin';
+        frame.setAttribute('allow', 'fullscreen; clipboard-write');
+        frame.addEventListener('load', () => {
+          status.textContent = 'Geladen. Bleibt das Fenster leer, erlaubt die Seite keine Einbettung. Nutze dann „Neuer Tab“.';
+        });
+        frame.src = url.href;
+        frameWrap.appendChild(frame);
+
+        input.value = url.href;
+        widget.data.url = url.href;
+        updateTabLink();
+        save();
+      }
+
+      function openPage() {
+        const url = normalizeUrl(input.value);
+        if (!url) {
+          status.textContent = 'Bitte gib eine gültige Webadresse ein, z. B. https://example.com';
+          return;
+        }
+        showPage(url);
+      }
+
+      input.value = widget.data.url || START_URL;
+      updateTabLink();
+      input.addEventListener('input', updateTabLink);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') openPage();
+      });
+
+      body.querySelector('[data-act="go"]').addEventListener('click', openPage);
+      body.querySelector('[data-act="reload"]').addEventListener('click', openPage);
+
+      const initialUrl = normalizeUrl(input.value);
+      if (initialUrl) showPage(initialUrl);
+    }
+
+    function renderText(body, widget) {
+      body.innerHTML = `
+        <div class="rte-toolbar">
+          <button class="rte-btn" type="button" data-cmd="bold"><strong>Fett</strong></button>
+          <button class="rte-btn" type="button" data-cmd="italic"><em>Kursiv</em></button>
+          <button class="rte-btn" type="button" data-cmd="underline"><u>Unterstrichen</u></button>
+          <button class="rte-btn" type="button" data-cmd="insertUnorderedList">Aufzählung</button>
+          <button class="rte-btn" type="button" data-cmd="insertOrderedList">Nummerierung</button>
+          <button class="rte-btn" type="button" data-block="h2">Überschrift</button>
+          <button class="rte-btn" type="button" data-block="p">Absatz</button>
+          <button class="rte-btn" type="button" data-cmd="removeFormat">Format entfernen</button>
+        </div>
+        <div class="rte-area" contenteditable="true"></div>
+      `;
+
+      const area = body.querySelector('.rte-area');
+      area.innerHTML = widget.data.html || '';
+
+      area.addEventListener('input', () => {
+        widget.data.html = area.innerHTML;
+        save();
+      });
+
+      body.querySelectorAll('.rte-btn').forEach(button => {
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.addEventListener('click', () => {
+          area.focus();
+
+          if (button.dataset.cmd) {
+            document.execCommand(button.dataset.cmd, false, null);
+          }
+
+          if (button.dataset.block) {
+            document.execCommand('formatBlock', false, button.dataset.block);
+          }
+
+          widget.data.html = area.innerHTML;
+          save();
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-add]').forEach(button => {
+      button.addEventListener('click', () => addWidget(button.dataset.add));
+    });
+
+    document.getElementById('reset-button').addEventListener('click', event => {
+      const button = event.currentTarget;
+
+      if (!resetPending) {
+        resetPending = true;
+        button.textContent = 'Zum Bestätigen erneut klicken';
+        setTimeout(() => {
+          resetPending = false;
+          button.textContent = 'Layout zurücksetzen';
+        }, 3000);
+        return;
+      }
+
+      try { localStorage.removeItem(STORE_KEY); } catch (error) {}
+      widgets = clone(DEFAULT_WIDGETS);
+      resetPending = false;
+      button.textContent = 'Layout zurücksetzen';
+      renderAll();
+      save();
+    });
+
+    window.addEventListener('beforeunload', saveNow);
+
+    load();
+    renderAll();
+    save();
+  </script>
+</body>
+</html>
